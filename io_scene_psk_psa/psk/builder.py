@@ -21,7 +21,7 @@ from ..shared.helpers import (
 )
 
 
-class PskBuildOptions(object):
+class PskBuildOptions:
     def __init__(self):
         self.bone_filter_mode = 'ALL'
         self.bone_collection_indices: list[PsxBoneCollection] = []
@@ -34,7 +34,7 @@ class PskBuildOptions(object):
         self.up_axis = 'Z'
 
 
-class PskBuildResult(object):
+class PskBuildResult:
     def __init__(self, psk: Psk, warnings: list[str]):
         self.psk: Psk = psk
         self.warnings: list[str] = warnings
@@ -526,7 +526,7 @@ def build_psk(context: Context, input_objects: PskInputObjects, options: PskBuil
                 face.wedge_indices = (face.wedge_indices[2], face.wedge_indices[1], face.wedge_indices[0])
 
         # Weights
-        if armature_object is not None:
+        if armature_object is not None and len(psx_bone_create_result.bones) > 0:
             armature_data = typing_cast(Armature, armature_object.data)
             bone_index_offset = psx_bone_create_result.armature_object_root_bone_indices[armature_object]
 
