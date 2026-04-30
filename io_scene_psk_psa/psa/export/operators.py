@@ -554,7 +554,18 @@ def create_psa_export_options(context: Context, armature_objects: Sequence[Objec
     options.sequence_name_suffix = pg.sequence_name_suffix
     options.sampling_mode = pg.sampling_mode
     options.export_space = pg.export_space
-    options.scale = pg.scale
+
+    match pg.transform_source:
+        case 'SCENE':
+            scene = context.scene
+            assert scene
+            transform_source = getattr(scene, 'psx_export')
+        case 'CUSTOM':
+            transform_source = pg
+        case _:
+            assert False, f'Invalid transform source: {pg.transform_source}'
+
+    options.scale = transform_source.scale
     options.forward_axis = pg.forward_axis
     options.up_axis = pg.up_axis
     options.sequence_source = pg.sequence_source
