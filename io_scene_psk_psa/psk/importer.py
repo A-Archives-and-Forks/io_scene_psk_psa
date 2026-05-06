@@ -2,7 +2,7 @@ import bmesh
 import bpy
 import numpy as np
 
-from bpy.types import Context, Object, VertexGroup, ArmatureModifier, FloatColorAttribute
+from bpy.types import Context, Object, VertexGroup, ArmatureModifier, FloatColorAttribute, IntAttribute
 from mathutils import Matrix, Quaternion, Vector
 from typing import cast as typing_cast
 
@@ -26,6 +26,7 @@ class PskImportOptions:
         self.should_import_materials = True
         self.scale = 1.0
         self.bdk_repository_id: str | None = None
+        self.should_import_smoothing_groups = True
 
 
 class ImportBone:
@@ -168,8 +169,11 @@ def import_psk(psk: Psk, context: Context, name: str, options: PskImportOptions)
         bm.verts.ensure_lookup_table()
 
         # Faces
-        invalid_face_indices = set()
-        for face_index, face in enumerate(psk.faces):
+        # NOTE: We discard faces if they are not able to be added to the mesh for a variety of reasons.
+        # We want to create a copy of *only* the valid faces and operate on those further downstream.
+        psk_faces: list[Psk.Face] = []
+        invalid_face_count = 0
+        for face in psk.faces:
             points = (
                 bm.verts[psk.wedges[face.wedge_indices[2]].point_index],
                 bm.verts[psk.wedges[face.wedge_indices[1]].point_index],
@@ -177,16 +181,18 @@ def import_psk(psk: Psk, context: Context, name: str, options: PskImportOptions)
             )
             try:
                 bm_face = bm.faces.new(points)
-                bm_face.material_index = face.material_index
             except ValueError:
                 # This happens for two reasons:
                 # 1. Two or more of the face's points are the same. (i.e, point indices of [0, 0, 1])
                 # 2. The face is a duplicate of another face. (i.e., point indices of [0, 1, 2] and [0, 1, 2])
-                invalid_face_indices.add(face_index)
+                # TODO: if we can pre-prune this list, that would be much cheaper.
+                continue
+            
+            bm_face.material_index = face.material_index
+            psk_faces.append(face)
 
-        # TODO: Handle invalid faces better.
-        if len(invalid_face_indices) > 0:
-            result.warnings.append(f'Discarded {len(invalid_face_indices)} invalid face(s).')
+        if invalid_face_count > 0:
+            result.warnings.append(f'Discarded {invalid_face_count} invalid face(s).')
 
         face_count = len(bm.faces)
 
@@ -195,9 +201,7 @@ def import_psk(psk: Psk, context: Context, name: str, options: PskImportOptions)
         # Texture Coordinates
         uv_layer_data_index = 0
         uv_layer_data = np.zeros((face_count * 3, 2), dtype=np.float32)
-        for face_index, face in enumerate(psk.faces):
-            if face_index in invalid_face_indices:
-                continue
+        for face in psk_faces:
             for wedge in map(lambda i: psk.wedges[i], reversed(face.wedge_indices)):
                 uv_layer_data[uv_layer_data_index] = wedge.u, 1.0 - wedge.v
                 uv_layer_data_index += 1
@@ -209,9 +213,7 @@ def import_psk(psk: Psk, context: Context, name: str, options: PskImportOptions)
             for extra_uv_index, extra_uvs in enumerate(psk.extra_uvs):
                 uv_layer_data = np.zeros((face_count * 3, 2), dtype=np.float32)
                 uv_layer_data_index = 0
-                for face_index, face in enumerate(psk.faces):
-                    if face_index in invalid_face_indices:
-                        continue
+                for face in psk_faces:
                     for wedge_index in reversed(face.wedge_indices):
                         u, v = extra_uvs[wedge_index]
                         uv_layer_data[uv_layer_data_index] = u, 1.0 - v
@@ -231,12 +233,10 @@ def import_psk(psk: Psk, context: Context, name: str, options: PskImportOptions)
                 psk_vertex_colors[:, :3] = np.vectorize(rgb_to_srgb)(psk_vertex_colors[:, :3])
 
             # Map the PSK vertex colors to the face corners.
-            face_count = len(psk.faces) - len(invalid_face_indices)
+            face_count = len(psk_faces)
             face_corner_colors = np.full((face_count * 3, 4), 1.0)
             face_corner_color_index = 0
-            for face_index, face in enumerate(psk.faces):
-                if face_index in invalid_face_indices:
-                    continue
+            for face in psk_faces:
                 for wedge_index in reversed(face.wedge_indices):
                     face_corner_colors[face_corner_color_index] = psk_vertex_colors[wedge_index]
                     face_corner_color_index += 1
