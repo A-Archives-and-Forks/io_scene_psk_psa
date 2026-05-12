@@ -368,8 +368,8 @@ def build_psa(context: Context, options: PsaBuildOptions) -> Psa:
 
     # Restore the previous actions & frame.
     for armature_object, action in saved_armature_object_actions.items():
-        assert armature_object.animation_data
-        armature_object.animation_data.action = action
+        if armature_object.animation_data is not None:
+            armature_object.animation_data.action = action
 
     context.scene.frame_set(saved_frame_current)
 
