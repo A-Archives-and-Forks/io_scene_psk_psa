@@ -73,7 +73,7 @@ def dfs_objects_in_collection(collection: Collection) -> Iterable[Object]:
         yield from _dfs_object_children(obj, collection)
 
 
-def dfs_collection_objects(collection: Collection, visible_only: bool = False) -> Iterable[DfsObject]:
+def dfs_collection_objects(collection: Collection) -> Iterable[DfsObject]:
     """
     Depth-first search of objects in a collection, including recursing into instances.
 
